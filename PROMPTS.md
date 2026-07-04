@@ -78,3 +78,11 @@ Before you upload it - make sure we covered everything i've asked
 ### 5. KEDA with application metrics
 
 Lets adjust the hpa by generating keda based on application metrics (not only cpu + mem for each one of the workers, also lean on latency + requests count)
+
+--------------------------------------------
+
+## How to reduce number of iterations :
+
+1. **Architecture-First Enforcement:** By forcing the model to output a Component Matrix and Roadmap before writing code, architectural misalignment was caught at the concept stage rather than during debugging.
+2. **Explicit Topology Declarations:** For example - Clearly defining that Workers must remain identical and behaviorally driven by `ENV` variables prevented the AI from generating redundant, decoupled codebases for each math operator.
+3. **Pre-empting Egress Constraints (Lesson Learned):** Providing the precise environment limitations in the very first prompt would have completely eliminated the PoC troubleshooting phase, allowing the model to build the offline test harness natively from step one.
