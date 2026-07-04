@@ -1,0 +1,56 @@
+# Values for the OFFICIAL temporalio/helm-charts chart (pinned to
+# temporal-1.5.0 in deploy.sh), targeting the throwaway Postgres deployed
+# by scripts/manifests/postgres-dev.yaml.
+#
+# IMPORTANT VERSION NOTE: as of the chart's v1.0.0 rewrite, it no longer
+# bundles ANY database sub-chart (Cassandra, MySQL, Postgres) or
+# Elasticsearch/Prometheus/Grafana - "bring your own" is the only
+# supported mode now. There is no `cassandra.enabled` / `elasticsearch.enabled`
+# top-level key to set to false anymore; those keys simply don't exist on
+# this chart version, since there's nothing bundled to disable. If you're
+# reading an older tutorial/StackOverflow answer referencing those keys,
+# it's describing a pre-1.0 chart version and no longer applies.
+#
+# createDatabase/manageSchema below mean the Temporal server itself
+# creates temporal_visibility (temporal itself already exists via
+# Postgres's own POSTGRES_DB init) and runs schema migrations on first
+# boot - no manual `temporal-sql-tool` step needed for this dev setup.
+server:
+  replicaCount: 1
+  config:
+    persistence:
+      defaultStore: default
+      visibilityStore: visibility
+      # Default is 512, sized for production clusters. A single-node Kind
+      # cluster running one Postgres pod has no use for that many shards -
+      # keep it small for a fast, lightweight dev instance. NOTE: this
+      # cannot be changed after first install without a fresh database. If
+      # you rerun deploy.sh's teardown/recreate, that's fine (Postgres is
+      # emptyDir, so it goes with the cluster; a fresh cluster is fine
+      # with a fresh numHistoryShards choice too).
+      numHistoryShards: 4
+      datastores:
+        default:
+          sql:
+            createDatabase: true
+            manageSchema: true
+            pluginName: postgres12
+            driverName: postgres12
+            databaseName: temporal
+            connectAddr: "postgres.temporal.svc.cluster.local:5432"
+            connectProtocol: tcp
+            user: temporal
+            existingSecret: temporal-db-secret
+            secretKey: password
+        visibility:
+          sql:
+            createDatabase: true
+            manageSchema: true
+            pluginName: postgres12
+            driverName: postgres12
+            databaseName: temporal_visibility
+            connectAddr: "postgres.temporal.svc.cluster.local:5432"
+            connectProtocol: tcp
+            user: temporal
+            existingSecret: temporal-db-secret
+            secretKey: password

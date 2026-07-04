@@ -1,0 +1,82 @@
+{{- range .Values.workers }}
+{{- $worker := . }}
+{{- $root := $ }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "calculator.workerFullname" (dict "root" $root "worker" $worker) }}
+  labels:
+    {{- include "calculator.commonLabels" $root | nindent 4 }}
+    {{- include "calculator.workerSelectorLabels" (dict "root" $root "worker" $worker) | nindent 4 }}
+    calculator.io/role: {{ $worker.role }}
+    calculator.io/task-queue: {{ $worker.taskQueue }}
+spec:
+  # NOTE: when hpa.enabled is true for this worker, `replicas` below only
+  # sets the INITIAL count. The HPA (see hpa.yaml) takes ownership of
+  # scaling from there - Helm re-applying this value on every `helm
+  # upgrade` would otherwise fight the HPA for control. This is expected;
+  # see README for the full note on Deployment vs HPA replica ownership.
+  replicas: {{ $worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "calculator.workerSelectorLabels" (dict "root" $root "worker" $worker) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "calculator.workerSelectorLabels" (dict "root" $root "worker" $worker) | nindent 8 }}
+        calculator.io/role: {{ $worker.role }}
+      annotations:
+        # Basic scrape-ability with no Prometheus Operator / ServiceMonitor
+        # CRD required - fits the assignment's "basic metrics" scope. A
+        # cluster running the Prometheus Operator would use a ServiceMonitor
+        # instead; these annotations are the lowest-common-denominator
+        # alternative that works with a plain `prometheus.yml` scrape_config
+        # using kubernetes_sd_configs (role: pod).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ $root.Values.metricsPort | quote }}
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: {{ $worker.name }}
+          image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          # The ONLY thing that varies between the "5 identical" activity
+          # workers, and the one thing that separates the workflow worker
+          # from them, is this single arg + the TEMPORAL_TASK_QUEUE env
+          # var below. Same image every time.
+          args:
+            - {{ $worker.role }}
+          env:
+            - name: TEMPORAL_HOST
+              value: {{ $root.Values.temporal.host | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ $root.Values.temporal.namespace | quote }}
+            - name: TEMPORAL_TASK_QUEUE
+              value: {{ $worker.taskQueue | quote }}
+            - name: HEALTH_PORT
+              value: {{ $root.Values.healthPort | quote }}
+            - name: METRICS_PORT
+              value: {{ $root.Values.metricsPort | quote }}
+            - name: LOG_LEVEL
+              value: {{ $root.Values.logLevel | quote }}
+          ports:
+            - name: health
+              containerPort: {{ $root.Values.healthPort }}
+            - name: metrics
+              containerPort: {{ $root.Values.metricsPort }}
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml ($worker.resources | default $root.Values.resources) | nindent 12 }}
+{{- end }}

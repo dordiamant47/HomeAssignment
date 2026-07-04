@@ -1,0 +1,54 @@
+{{- range .Values.workers }}
+{{- $worker := . }}
+{{- $root := $ }}
+{{- if $worker.keda.enabled }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "calculator.workerFullname" (dict "root" $root "worker" $worker) }}
+  labels:
+    {{- include "calculator.commonLabels" $root | nindent 4 }}
+    {{- include "calculator.workerSelectorLabels" (dict "root" $root "worker" $worker) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "calculator.workerFullname" (dict "root" $root "worker" $worker) }}
+  minReplicaCount: {{ $worker.keda.minReplicas }}
+  maxReplicaCount: {{ $worker.keda.maxReplicas }}
+  triggers:
+    # Standard resource triggers - same signals as plain HPA would use.
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: {{ $worker.keda.cpuUtilization | quote }}
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: {{ $worker.keda.memoryUtilization | quote }}
+
+    # Application-level signal #1: how long a task sits waiting before this
+    # worker picks it up (p95), read from Temporal's own built-in metrics
+    # (see sdk/platform_sdk/metrics.py) via Prometheus. This is the actual
+    # "is this queue backed up" signal - CPU/memory can't see it directly.
+    - type: prometheus
+      metricName: {{ $worker.name }}-schedule-to-start-latency
+      metadata:
+        serverAddress: {{ $root.Values.prometheus.serverAddress }}
+        threshold: {{ $worker.keda.latencyThresholdMs | quote }}
+        query: >-
+          histogram_quantile(0.95,
+            sum(rate(temporal_activity_schedule_to_start_latency_bucket{task_queue="{{ $worker.taskQueue }}"}[2m]))
+            by (le)
+          )
+
+    # Application-level signal #2: how many activity executions/sec this
+    # worker is completing, per replica - a direct request-rate signal.
+    - type: prometheus
+      metricName: {{ $worker.name }}-requests-per-second
+      metadata:
+        serverAddress: {{ $root.Values.prometheus.serverAddress }}
+        threshold: {{ $worker.keda.requestsPerSecond | quote }}
+        query: >-
+          sum(rate(temporal_activity_execution_latency_count{task_queue="{{ $worker.taskQueue }}"}[2m]))
+{{- end }}
+{{- end }}

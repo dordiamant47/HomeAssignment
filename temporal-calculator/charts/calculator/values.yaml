@@ -1,0 +1,101 @@
+image:
+  repository: calculator
+  tag: local
+  pullPolicy: IfNotPresent
+
+temporal:
+  host: "temporal-frontend.temporal.svc.cluster.local:7233"
+  namespace: "default"
+
+# KEDA's Prometheus scaler queries this to read latency/request-rate
+# metrics scraped from each worker's own /metrics endpoint (see
+# scripts/manifests/prometheus-dev.yaml).
+prometheus:
+  serverAddress: "http://prometheus.monitoring.svc.cluster.local:9090"
+
+healthPort: 8080
+metricsPort: 9090
+logLevel: INFO
+
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 256Mi}
+
+# THE MATRIX. One entry per worker. `keda:` replaces the old plain HPA -
+# each activity worker scales on FOUR signals at once (KEDA scales to
+# whichever trigger asks for the most replicas): CPU, memory, p95 queue
+# wait time, and requests/sec. workflow-worker has keda.enabled: false -
+# it's not one of the interchangeable, independently-scaled workers.
+workers:
+  - name: workflow-worker
+    role: workflow-worker
+    taskQueue: calculator-workflow-queue
+    replicas: 1
+    keda:
+      enabled: false
+
+  - name: add-worker
+    role: activity-worker
+    taskQueue: add-task-queue
+    replicas: 1
+    keda:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 10
+      cpuUtilization: 70
+      memoryUtilization: 75
+      latencyThresholdMs: 500      # p95 schedule-to-start latency
+      requestsPerSecond: 20         # activity executions/sec per replica
+
+  - name: sub-worker
+    role: activity-worker
+    taskQueue: sub-task-queue
+    replicas: 1
+    keda:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 10
+      cpuUtilization: 70
+      memoryUtilization: 75
+      latencyThresholdMs: 500
+      requestsPerSecond: 20
+
+  - name: mul-worker
+    role: activity-worker
+    taskQueue: mul-task-queue
+    replicas: 1
+    keda:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 10
+      cpuUtilization: 70
+      memoryUtilization: 75
+      latencyThresholdMs: 500
+      requestsPerSecond: 20
+
+  - name: div-worker
+    role: activity-worker
+    taskQueue: div-task-queue
+    replicas: 1
+    keda:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 10
+      cpuUtilization: 70
+      memoryUtilization: 75
+      latencyThresholdMs: 500
+      requestsPerSecond: 20
+
+  - name: pow-worker
+    role: activity-worker
+    taskQueue: pow-task-queue
+    replicas: 1
+    # '^' is the heaviest op per task - lower thresholds so it scales out sooner.
+    keda:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 8
+      cpuUtilization: 60
+      memoryUtilization: 70
+      latencyThresholdMs: 300
+      requestsPerSecond: 15

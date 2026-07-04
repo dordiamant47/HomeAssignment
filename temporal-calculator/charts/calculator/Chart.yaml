@@ -1,0 +1,9 @@
+apiVersion: v2
+name: calculator
+description: >-
+  Distributed calculator on Temporal. One generic chart, one Docker image;
+  every worker role (the workflow worker and all 5 op-specific activity
+  workers) is generated from a single matrix in values.yaml.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
