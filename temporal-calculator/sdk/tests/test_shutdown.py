@@ -10,6 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from platform_sdk.shutdown import install_signal_handlers  # noqa: E402
 
+# On Windows, os.kill(pid, SIGTERM) calls TerminateProcess and kills the
+# process outright instead of delivering a catchable signal, so these tests
+# can't simulate signal delivery there the way they can on POSIX.
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="os.kill(SIGTERM) terminates the process on Windows"
+)
+
 
 @pytest.mark.asyncio
 async def test_sigterm_sets_shutdown_event():

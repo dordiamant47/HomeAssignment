@@ -103,8 +103,8 @@ README.md                       this file
 **1. Run the tests first** — no cluster needed, confirms the code itself is sound before touching Kubernetes:
 
 ```bash
-cd sdk && pip install -e . && pytest tests/          # 26 passed
-cd ../calculator && PYTHONPATH=../sdk pytest tests/   # 92 passed
+cd sdk && pip install -e ".[dev]" && pytest tests/    # 26 passed
+cd ../calculator && PYTHONPATH=../sdk pytest tests/   # 86 passed, 6 skipped
 ```
 
 **2. Stand up the cluster** — one script does everything: Kind, metrics-server, KEDA, a small Prometheus, the official Temporal server chart, and our calculator chart.
